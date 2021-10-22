@@ -109,24 +109,16 @@ def output_included_content_dict(included_data : dict):
         print()
 
 def timeline_posts():
-    jst_time_delta = datetime.timedelta(hours=9)
-    jst_tz = datetime.timezone(jst_time_delta)
-    current_time = datetime.datetime.now(jst_tz).isoformat(timespec='milliseconds')
-    url = f"https://yuyuyu.api.app.c-rayon.com/api/public/tl_posts/ids?from={current_time}"
+    url = "https://yuyuyu.api.app.c-rayon.com/api/public/tl_posts/latest"
 
     posts_response = global_session.get(url)
     posts_json = posts_response.json()
     posts_data = posts_json["data"]
 
-    posts_data = sorted(posts_data, key = lambda post: datetime.datetime.fromisoformat(post["attributes"]["publishedAt"]), reverse=True)
-    posts_urls = ["https://yuyuyu.api.app.c-rayon.com/api/public/tl_posts/{}".format(post["id"]) for post in posts_data]
-    posts_responses = [global_session.get(url) for url in posts_urls]
-    posts_jsons = [response.json() for response in posts_responses]
-
     while True:
-        for i in range(len(posts_jsons)):
-            post_json = posts_jsons[i]
-            print("{}. {}...".format(i, post_json["data"]["attributes"]["text"][:40].replace("\n", "\\n")))
+        for i in range(len(posts_data)):
+            post_json = posts_data[i]
+            print("{}. {}...".format(i, post_json["attributes"]["text"][:40].replace("\n", "\\n")))
 
         print("q. Back\n")
 
@@ -137,13 +129,16 @@ def timeline_posts():
             break
 
         post_index = int(action)
+        post = posts_data[post_index]
 
-        post = posts_jsons[post_index]
+        post_url = "https://yuyuyu.api.app.c-rayon.com/api/public/tl_posts/{}".format(post["id"])
+        posts_response = global_session.get(post_url)
+        post_json = posts_response.json()
 
-        user_name = [inc for inc in post["included"] if inc["type"] == "user"][0]["attributes"]["name"]
-        published_time = datetime.datetime.fromisoformat(post["data"]["attributes"]["publishedAt"])
-        post_text = post["data"]["attributes"]["text"]
-        included_data = get_included_content_dict(post["included"])
+        user_name = [inc for inc in post_json["included"] if inc["type"] == "user"][0]["attributes"]["name"]
+        published_time = datetime.datetime.fromisoformat(post_json["data"]["attributes"]["publishedAt"])
+        post_text = post_json["data"]["attributes"]["text"]
+        included_data = get_included_content_dict(post_json["included"])
 
 
         print(f"\n\n\nUser:{user_name}")
