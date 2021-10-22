@@ -106,7 +106,7 @@ def output_included_content_dict(included_data : dict):
 def timeline_posts():
     jst_time_delta = datetime.timedelta(hours=9)
     jst_tz = datetime.timezone(jst_time_delta)
-    current_time = datetime.datetime.now(datetime.timezone.utc).astimezone(jst_tz).isoformat(timespec='milliseconds')
+    current_time = datetime.datetime.now(jst_tz).isoformat(timespec='milliseconds')
     url = f"https://yuyuyu.api.app.c-rayon.com/api/public/tl_posts/ids?from={current_time}"
 
     posts_response = global_session.get(url)
