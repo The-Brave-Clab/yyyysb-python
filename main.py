@@ -154,6 +154,8 @@ def timeline_posts():
 
         output_included_content_dict(included_data)
 
+        input("Press Enter to Go Back...")
+
         print("\n")
 
 def private_content(content_type : str, per_page : int, has_post_user : bool = True):
@@ -229,6 +231,8 @@ def private_content(content_type : str, per_page : int, has_post_user : bool = T
 
         output_included_content_dict(included_data)
 
+        input("Press Enter to Go Back...")
+
         print("\n")
 
 def informations(per_page : int):
@@ -294,9 +298,9 @@ def informations(per_page : int):
 
         output_included_content_dict(included_data)
 
+        input("Press Enter to Go Back...")
+
         print("\n")
-
-
 
 if __name__ == "__main__":
     while True:
