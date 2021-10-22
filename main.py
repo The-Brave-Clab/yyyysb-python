@@ -94,6 +94,9 @@ def output_included_content_dict(included_data : dict):
             for include in kv_pair[1]:
                 print("\t{}".format(include["attributes"]["name"]))
                 print("\t{}".format(include["attributes"]["avatarUrls"]["original"]))
+        elif kv_pair[0] == "informationCategory":
+            for include in kv_pair[1]:
+                print("\t{}".format(include["attributes"]["name"]))
         else:
             for include in kv_pair[1]:
                 print("\t(Unsupported) {}".format(include["id"]))
