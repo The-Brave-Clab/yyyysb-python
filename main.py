@@ -29,7 +29,7 @@ def print_login_message():
     print("You only need to login once while using this client. Your password is hidden during input.")
     print("\n\n")
 
-def login() -> requests.Response:
+def login():
     print_login_message()
 
     email = input("Email: ")
@@ -40,7 +40,7 @@ def login() -> requests.Response:
 
     if response.status_code != 200:
         print("Login failed!")
-        return None
+        return
 
     user_info = response.json()
     print("Logged in as {}.".format(user_info["displayName"]))
@@ -50,7 +50,12 @@ def login() -> requests.Response:
     login_data["idToken"] = user_info["idToken"]
     login_data["refreshToken"] = user_info["refreshToken"]
 
-    return response
+def get_bearer_auth() -> BearerAuth:
+    if not login_data["loggedIn"]:
+        login()
+
+    return BearerAuth(login_data["idToken"])
+
 
 def get_text_from_html(html : str) -> str:
     soup = BeautifulSoup(html, features="html.parser")
@@ -61,10 +66,24 @@ def get_text_from_html(html : str) -> str:
     # get text
     return soup.get_text(separator="\n")
 
-def get_image_urls_from_includes(includes : list) -> list:
-    images = [inc for inc in includes if inc["type"] == "photo" or inc["type"] == "thumbnail"]
-    return [image["attributes"]["urls"]["original"] for image in images]
+def get_included_content_dict(included : list) -> dict:
+    result = {}
+    for inc in included:
+        if not inc["type"] in result.keys():
+            result[inc["type"]] = []
 
+        result[inc["type"]].append(inc)
+
+    return result
+
+def output_included_content_dict(included_data : dict):
+    for kv_pair in included_data.items():
+        if kv_pair[0] != "photo" and kv_pair[0] != "thumbnail":
+            continue
+        print(f"{kv_pair[0]}:")
+        for include in kv_pair[1]:
+            print("\t{}".format(include["attributes"]["urls"]["original"]))
+        print()
 
 def timeline_posts():
     current_time = datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(timespec='milliseconds')
@@ -99,7 +118,8 @@ def timeline_posts():
         user_name = [inc for inc in post["included"] if inc["type"] == "user"][0]["attributes"]["name"]
         published_time = datetime.datetime.fromisoformat(post["data"]["attributes"]["publishedAt"])
         post_text = post["data"]["attributes"]["text"]
-        image_urls = get_image_urls_from_includes(post["included"])
+        included_data = get_included_content_dict(post["included"])
+
 
         print(f"\n\n\nUser:{user_name}")
         print(f"Published At:{published_time}")
@@ -107,10 +127,7 @@ def timeline_posts():
         print(post_text)
         print("\n---------------------------------------\n")
 
-        if len(image_urls) > 0:
-            print("\nImages:")
-            for image_url in image_urls:
-                print(f"\t{image_url}")
+        output_included_content_dict(included_data)
 
         print("\n")
 
@@ -162,10 +179,8 @@ def articles(per_page : int):
         post_id = page_data[post_index]["id"]
 
         content_location_url = f"https://yuyuyu.api.app.c-rayon.com/api/private/articles/{post_id}/content_location"
-        if not login_data["loggedIn"]:
-            login()
 
-        content_location_response = global_session.get(content_location_url, auth=BearerAuth(login_data["idToken"]))
+        content_location_response = global_session.get(content_location_url, auth=get_bearer_auth())
         content_location_json = content_location_response.json()
         content_url = content_location_json["data"]["meta"]["content_url"]
 
@@ -174,7 +189,7 @@ def articles(per_page : int):
         content_html = content_json["data"]["attributes"]["renderedBody"]
 
         content_text = get_text_from_html(content_html)
-        image_urls = get_image_urls_from_includes(content_json["included"])    
+        included_data = get_included_content_dict(content_json["included"])
         user_name = [inc for inc in content_json["included"] if inc["type"] == "user"][0]["attributes"]["name"]
         published_time = content_json["data"]["attributes"]["publishDate"]
 
@@ -184,10 +199,7 @@ def articles(per_page : int):
         print(content_text)
         print("\n---------------------------------------\n")
 
-        if len(image_urls) > 0:
-            print("\nImages:")
-            for image_url in image_urls:
-                print(f"\t{image_url}")
+        output_included_content_dict(included_data)
 
         print("\n")
 
