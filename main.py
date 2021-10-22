@@ -3,6 +3,7 @@ from getpass import getpass
 
 import requests
 from bs4 import BeautifulSoup
+from vimeo_downloader import Vimeo
 
 global_session = requests.session()
 login_data = {"loggedIn": False}
@@ -89,7 +90,10 @@ def output_included_content_dict(included_data : dict):
                 html = include["attributes"]["html"]
                 soup = BeautifulSoup(html, 'html.parser')
                 link = soup.find_all('iframe')[0]["src"]
-                print(f"\t{link}")
+                link_without_params = link.split("?")[0]
+                vimeo_video = Vimeo(link_without_params)
+                best_stream = vimeo_video.best_stream
+                print(f"\t{best_stream.direct_url}")
         elif kv_pair[0] == "user":
             for include in kv_pair[1]:
                 print("\t{}".format(include["attributes"]["name"]))

@@ -9,11 +9,12 @@ You'll need to use Python 3 to run the script.
 The script uses the following 3rd party libraries:
  * `requests`
  * `BeautifulSoup4`
+ * `vimeo-downloader`
 
 To install the dependencies with pip:
 
 ```sh
-python -m pip install requests beautifulsoup4
+python -m pip install requests beautifulsoup4 vimeo-downloader
 ```
 
 ## Usage
