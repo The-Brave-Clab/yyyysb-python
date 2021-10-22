@@ -78,11 +78,26 @@ def get_included_content_dict(included : list) -> dict:
 
 def output_included_content_dict(included_data : dict):
     for kv_pair in included_data.items():
-        if kv_pair[0] != "photo" and kv_pair[0] != "thumbnail":
-            continue
+
         print(f"{kv_pair[0]}:")
-        for include in kv_pair[1]:
-            print("\t{}".format(include["attributes"]["urls"]["original"]))
+
+        if kv_pair[0] == "photo" or kv_pair[0] == "thumbnail":
+            for include in kv_pair[1]:
+                print("\t{}".format(include["attributes"]["urls"]["original"]))
+        elif kv_pair[0] == "vimeo":
+            for include in kv_pair[1]:
+                html = include["attributes"]["html"]
+                soup = BeautifulSoup(html, 'html.parser')
+                link = soup.find_all('iframe')[0]["src"]
+                print(f"\t{link}")
+        elif kv_pair[0] == "user":
+            for include in kv_pair[1]:
+                print("\t{}".format(include["attributes"]["name"]))
+                print("\t{}".format(include["attributes"]["avatarUrls"]["original"]))
+        else:
+            for include in kv_pair[1]:
+                print("\t(Unsupported) {}".format(include["id"]))
+                
         print()
 
 def timeline_posts():
@@ -122,7 +137,7 @@ def timeline_posts():
 
 
         print(f"\n\n\nUser:{user_name}")
-        print(f"Published At:{published_time}")
+        print(f"Published At: {published_time}")
         print("\n---------------------------------------\n")
         print(post_text)
         print("\n---------------------------------------\n")
@@ -131,8 +146,83 @@ def timeline_posts():
 
         print("\n")
 
-def articles(per_page : int):
-    url = "https://yuyuyu.api.app.c-rayon.com/api/public/articles/latest"
+def private_content(content_type : str, per_page : int, has_post_user : bool = True):
+    url = f"https://yuyuyu.api.app.c-rayon.com/api/public/{content_type}/latest"
+    
+    current_page = 1
+
+    while True:
+        pagination_url = f"{url}?page={current_page}&per_page={per_page}"
+
+        page_response = global_session.get(pagination_url)
+        page_json = page_response.json()
+        page_data = page_json["data"]
+
+        first_page = current_page == 1
+        last_page = len(page_data) < per_page
+
+        for i in range(len(page_data)):
+            title = page_data[i]["attributes"]["title"]
+            print(f"{i}. {title}")
+
+        if not first_page:
+            print("-. Previous Page")
+
+        if not last_page:
+            print("+. Next Page")
+
+        print("q. Back\n")
+
+        action = input("Enter your action: ")
+        print()
+
+        if action == "-":
+            current_page -= 1
+            print()
+            continue
+
+        if action == "+":
+            current_page += 1
+            print()
+            continue
+
+        if action == "q":
+            print()
+            break
+
+        post_index = int(action)
+        post_id = page_data[post_index]["id"]
+
+        content_location_url = f"https://yuyuyu.api.app.c-rayon.com/api/private/{content_type}/{post_id}/content_location"
+
+        content_location_response = global_session.get(content_location_url, auth=get_bearer_auth())
+        content_location_json = content_location_response.json()
+        content_url = content_location_json["data"]["meta"]["content_url"]
+
+        content_response = global_session.get(content_url)
+        content_json = content_response.json()
+        content_html = content_json["data"]["attributes"]["renderedBody"]
+
+        content_text = get_text_from_html(content_html)
+        included_data = get_included_content_dict(content_json["included"])
+        if has_post_user:
+            user_name = [inc for inc in content_json["included"] if inc["type"] == "user"][0]["attributes"]["name"]
+        published_time = content_json["data"]["attributes"]["publishDate"]
+
+        print("\n\n")
+        if (has_post_user):
+            print(f"User: {user_name}")
+        print(f"Published At: {published_time}")
+        print("\n---------------------------------------\n")
+        print(content_text)
+        print("\n---------------------------------------\n")
+
+        output_included_content_dict(included_data)
+
+        print("\n")
+
+def informations(per_page : int):
+    url = "https://yuyuyu.api.app.c-rayon.com/api/public/informations"
 
     current_page = 1
 
@@ -178,25 +268,18 @@ def articles(per_page : int):
         post_index = int(action)
         post_id = page_data[post_index]["id"]
 
-        content_location_url = f"https://yuyuyu.api.app.c-rayon.com/api/private/articles/{post_id}/content_location"
+        post_url = f"https://yuyuyu.api.app.c-rayon.com/api/public/informations/{post_id}"
+        post_response = global_session.get(post_url)
+        post_json = post_response.json()
+        
+        post_html = post_json["data"]["attributes"]["renderedBody"]
+        post_text = get_text_from_html(post_html)
+        post_date = post_json["data"]["attributes"]["announcedDate"]
+        included_data = get_included_content_dict(post_json["included"])
 
-        content_location_response = global_session.get(content_location_url, auth=get_bearer_auth())
-        content_location_json = content_location_response.json()
-        content_url = content_location_json["data"]["meta"]["content_url"]
-
-        content_response = global_session.get(content_url)
-        content_json = content_response.json()
-        content_html = content_json["data"]["attributes"]["renderedBody"]
-
-        content_text = get_text_from_html(content_html)
-        included_data = get_included_content_dict(content_json["included"])
-        user_name = [inc for inc in content_json["included"] if inc["type"] == "user"][0]["attributes"]["name"]
-        published_time = content_json["data"]["attributes"]["publishDate"]
-
-        print(f"\n\n\nUser:{user_name}")
-        print(f"Published At:{published_time}")
+        print(f"\n\n\nPublished At: {post_date}")
         print("\n---------------------------------------\n")
-        print(content_text)
+        print(post_text)
         print("\n---------------------------------------\n")
 
         output_included_content_dict(included_data)
@@ -204,14 +287,14 @@ def articles(per_page : int):
         print("\n")
 
 
-        
-
 
 if __name__ == "__main__":
     while True:
         print("\n\n")
         print("0. View Timeline Posts")
-        print("1. View Articles (REQUIRES LOGIN)")
+        print("1. View Informations")
+        print("2. View Articles (REQUIRES LOGIN)")
+        print("3. View Videos (REQUIRES LOGIN)")
         print("q. Exit\n")
 
         action = input("Enter your action: ")
@@ -225,4 +308,8 @@ if __name__ == "__main__":
         if action == "0":
             timeline_posts()
         elif action == "1":
-            articles(6)
+            informations(20)
+        elif action == "2":
+            private_content("articles", 6)
+        elif action == "3":
+            private_content("videos", 6, False)
