@@ -109,36 +109,74 @@ def output_included_content_dict(included_data : dict):
         print()
 
 def timeline_posts():
-    url = "https://yuyuyu.api.app.c-rayon.com/api/public/tl_posts/latest"
+    jst_time_delta = datetime.timedelta(hours=9)
+    jst_tz = datetime.timezone(jst_time_delta)
 
-    posts_response = global_session.get(url)
-    posts_json = posts_response.json()
-    posts_data = posts_json["data"]
+    current_page = 0
+    posts_jsons = []
+    current_time = datetime.datetime.now(jst_tz).isoformat(timespec='milliseconds')
 
     while True:
-        for i in range(len(posts_data)):
-            post_json = posts_data[i]
-            print("{}. {}...".format(i, post_json["attributes"]["text"][:40].replace("\n", "\\n")))
+
+        url = f"https://yuyuyu.api.app.c-rayon.com/api/public/tl_posts/ids?from={current_time}"
+
+        posts_response = global_session.get(url)
+        posts_json = posts_response.json()
+        posts_data = posts_json["data"]
+
+        posts_data = sorted(posts_data, key = lambda post: datetime.datetime.fromisoformat(post["attributes"]["publishedAt"]), reverse=True)
+        posts_urls = ["https://yuyuyu.api.app.c-rayon.com/api/public/tl_posts/{}".format(post["id"]) for post in posts_data]
+        posts_responses = [global_session.get(url) for url in posts_urls]
+        posts_jsons = [response.json() for response in posts_responses]
+        
+        first_page = current_page == 0
+        last_page = len(posts_jsons) < 10 # TODO: 10 is a magic number for now
+
+        for i in range(len(posts_jsons)):
+            post_json = posts_jsons[i]
+            print("{}. {}...".format(i, post_json["data"]["attributes"]["text"][:40].replace("\n", "\\n")))
+
+        if not first_page:
+            print("-. Previous Page")
+
+        if not last_page:
+            print("+. Next Page")
 
         print("q. Back\n")
 
         action = input("Enter your action: ")
         print()
 
+        if action == "-":
+            current_page -= 1
+            if current_page == 0:
+                current_time = datetime.datetime.now(jst_tz).isoformat(timespec='milliseconds')
+            else:
+                current_time = posts_jsons[-1]["data"]["attributes"]["publishedAt"]
+            print()
+            continue
+
+        if action == "+":
+            current_page += 1
+            if current_page == 0:
+                current_time = datetime.datetime.now(jst_tz).isoformat(timespec='milliseconds')
+            else:
+                current_time = posts_jsons[-1]["data"]["attributes"]["publishedAt"]
+            print()
+            continue
+
         if action == "q":
+            print()
             break
 
         post_index = int(action)
-        post = posts_data[post_index]
 
-        post_url = "https://yuyuyu.api.app.c-rayon.com/api/public/tl_posts/{}".format(post["id"])
-        posts_response = global_session.get(post_url)
-        post_json = posts_response.json()
+        post = posts_jsons[post_index]
 
-        user_name = [inc for inc in post_json["included"] if inc["type"] == "user"][0]["attributes"]["name"]
-        published_time = datetime.datetime.fromisoformat(post_json["data"]["attributes"]["publishedAt"])
-        post_text = post_json["data"]["attributes"]["text"]
-        included_data = get_included_content_dict(post_json["included"])
+        user_name = [inc for inc in post["included"] if inc["type"] == "user"][0]["attributes"]["name"]
+        published_time = datetime.datetime.fromisoformat(post["data"]["attributes"]["publishedAt"])
+        post_text = post["data"]["attributes"]["text"]
+        included_data = get_included_content_dict(post["included"])
 
 
         print(f"\n\n\nUser:{user_name}")
