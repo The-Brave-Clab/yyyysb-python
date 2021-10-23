@@ -134,7 +134,7 @@ def timeline_posts():
 
         for i in range(len(posts_jsons)):
             post_json = posts_jsons[i]
-            print("{}. {}...".format(i, post_json["data"]["attributes"]["text"][:40].replace("\n", "\\n")))
+            print("{}. {}...".format(i, post_json["data"]["attributes"]["text"][:40].replace("\n", "")))
 
         if not first_page:
             print("-. Previous Page")
