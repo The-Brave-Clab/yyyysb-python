@@ -3,7 +3,13 @@ from getpass import getpass
 
 import requests
 from bs4 import BeautifulSoup
-from vimeo_downloader import Vimeo
+
+use_vimeo_downloader = True
+
+try:
+    from vimeo_downloader import Vimeo
+except:
+    use_vimeo_downloader = False
 
 global_session = requests.session()
 login_data = {"loggedIn": False}
@@ -33,23 +39,27 @@ def print_login_message():
 def login():
     print_login_message()
 
-    email = input("Email: ")
-    password = getpass("Password: ")
+    try:
+        email = input("Email: ")
+        password = getpass("Password: ")
 
-    payload = {"email": email, "password": password, "returnSecureToken": True}
-    response = global_session.post("https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyPassword?key=AIzaSyCvopRLMWoEp8l_QoggkujiYLq2WyHX77k", data=payload)
+        payload = {"email": email, "password": password, "returnSecureToken": True}
+        response = global_session.post("https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyPassword?key=AIzaSyCvopRLMWoEp8l_QoggkujiYLq2WyHX77k", data=payload)
 
-    if response.status_code != 200:
+        if response.status_code != 200:
+            print("Login failed!")
+            return
+
+        user_info = response.json()
+        print("Logged in as {}.".format(user_info["displayName"]))
+
+        login_data["loggedIn"] = True
+        login_data["localId"] = user_info["localId"]
+        login_data["idToken"] = user_info["idToken"]
+        login_data["refreshToken"] = user_info["refreshToken"]
+    except:
         print("Login failed!")
-        return
-
-    user_info = response.json()
-    print("Logged in as {}.".format(user_info["displayName"]))
-
-    login_data["loggedIn"] = True
-    login_data["localId"] = user_info["localId"]
-    login_data["idToken"] = user_info["idToken"]
-    login_data["refreshToken"] = user_info["refreshToken"]
+        login_data["loggedIn"] = False
 
 def get_bearer_auth() -> BearerAuth:
     if not login_data["loggedIn"]:
@@ -87,14 +97,23 @@ def output_included_content_dict(included_data : dict):
                 print("\t{}".format(include["attributes"]["urls"]["original"]))
         elif kv_pair[0] == "vimeo":
             for include in kv_pair[1]:
-                html = include["attributes"]["html"]
-                soup = BeautifulSoup(html, 'html.parser')
-                link = soup.find_all('iframe')[0]["src"]
-                print(f"\t[Embedded] {link}")
-                link_without_params = link.split("?")[0]
-                vimeo_video = Vimeo(link_without_params)
-                best_stream = vimeo_video.best_stream
-                print(f"\t[ Direct ] {best_stream.direct_url}")
+                try:
+                    html = include["attributes"]["html"]
+                    soup = BeautifulSoup(html, 'html.parser')
+                    link = soup.find_all('iframe')[0]["src"]
+                    print(f"\t[Embedded] {link}")
+                except:
+                    print("\tFailed to get the embedded link of vimeo video")
+                    continue
+                if use_vimeo_downloader:
+                    try:
+                        link_without_params = link.split("?")[0]
+                        vimeo_video = Vimeo(link_without_params)
+                        best_stream = vimeo_video.best_stream
+                        print(f"\t[ Direct ] {best_stream.direct_url}")
+                    except:
+                        print("\tFailed to get the direct link of vimeo video")
+                        continue
         elif kv_pair[0] == "user":
             for include in kv_pair[1]:
                 print("\t{}".format(include["attributes"]["name"]))
@@ -120,14 +139,22 @@ def timeline_posts():
 
         url = f"https://yuyuyu.api.app.c-rayon.com/api/public/tl_posts/ids?from={current_time}"
 
-        posts_response = global_session.get(url)
-        posts_json = posts_response.json()
-        posts_data = posts_json["data"]
+        try:
+            posts_response = global_session.get(url)
+            posts_json = posts_response.json()
+            posts_data = posts_json["data"]
+        except:
+            print("Failed to retrieve timeline posts")
+            break
 
         posts_data = sorted(posts_data, key = lambda post: datetime.datetime.fromisoformat(post["attributes"]["publishedAt"]), reverse=True)
         posts_urls = ["https://yuyuyu.api.app.c-rayon.com/api/public/tl_posts/{}".format(post["id"]) for post in posts_data]
-        posts_responses = [global_session.get(url) for url in posts_urls]
-        posts_jsons = [response.json() for response in posts_responses]
+        try:
+            posts_responses = [global_session.get(url) for url in posts_urls]
+            posts_jsons = [response.json() for response in posts_responses]
+        except:
+            print("Failed to retrieve timeline posts")
+            break
         
         first_page = current_page == 0
         last_page = len(posts_jsons) < 10 # TODO: 10 is a magic number for now
@@ -169,6 +196,14 @@ def timeline_posts():
             print()
             break
 
+        try:
+            action_int = int(action)
+        except:
+            continue
+
+        if action_int < 0 or action_int >= len(posts_jsons):
+            continue
+
         post_index = int(action)
 
         post = posts_jsons[post_index]
@@ -199,9 +234,13 @@ def private_content(content_type : str, per_page : int, has_post_user : bool = T
     while True:
         pagination_url = f"{url}?page={current_page}&per_page={per_page}"
 
-        page_response = global_session.get(pagination_url)
-        page_json = page_response.json()
-        page_data = page_json["data"]
+        try:
+            page_response = global_session.get(pagination_url)
+            page_json = page_response.json()
+            page_data = page_json["data"]
+        except:
+            print(f"Failed to retrieve {content_type} data")
+            break
 
         first_page = current_page == 1
         last_page = len(page_data) < per_page
@@ -235,18 +274,34 @@ def private_content(content_type : str, per_page : int, has_post_user : bool = T
             print()
             break
 
+        try:
+            action_int = int(action)
+        except:
+            continue
+
+        if action_int < 0 or action_int >= len(page_data):
+            continue
+
         post_index = int(action)
         post_id = page_data[post_index]["id"]
 
         content_location_url = f"https://yuyuyu.api.app.c-rayon.com/api/private/{content_type}/{post_id}/content_location"
 
-        content_location_response = global_session.get(content_location_url, auth=get_bearer_auth())
-        content_location_json = content_location_response.json()
-        content_url = content_location_json["data"]["meta"]["content_url"]
+        try:
+            content_location_response = global_session.get(content_location_url, auth=get_bearer_auth())
+            content_location_json = content_location_response.json()
+            content_url = content_location_json["data"]["meta"]["content_url"]
+        except:
+            print(f"Failed to retrieve {content_type}/{post_id} location data")
+            break
 
-        content_response = global_session.get(content_url)
-        content_json = content_response.json()
-        content_html = content_json["data"]["attributes"]["renderedBody"]
+        try:
+            content_response = global_session.get(content_url)
+            content_json = content_response.json()
+            content_html = content_json["data"]["attributes"]["renderedBody"]
+        except:
+            print(f"Failed to retrieve {content_type}/{post_id} data")
+            break
 
         content_text = get_text_from_html(content_html)
         included_data = get_included_content_dict(content_json["included"])
@@ -276,9 +331,13 @@ def informations(per_page : int):
     while True:
         pagination_url = f"{url}?page={current_page}&per_page={per_page}"
 
-        page_response = global_session.get(pagination_url)
-        page_json = page_response.json()
-        page_data = page_json["data"]
+        try:
+            page_response = global_session.get(pagination_url)
+            page_json = page_response.json()
+            page_data = page_json["data"]
+        except:
+            print("Failed to retrieve informations data")
+            break
 
         first_page = current_page == 1
         last_page = len(page_data) < per_page
@@ -316,8 +375,13 @@ def informations(per_page : int):
         post_id = page_data[post_index]["id"]
 
         post_url = f"https://yuyuyu.api.app.c-rayon.com/api/public/informations/{post_id}"
-        post_response = global_session.get(post_url)
-        post_json = post_response.json()
+
+        try:
+            post_response = global_session.get(post_url)
+            post_json = post_response.json()
+        except:
+            print(f"Failed to retrieve informations/{post_id} data")
+            break
         
         post_html = post_json["data"]["attributes"]["renderedBody"]
         post_text = get_text_from_html(post_html)
