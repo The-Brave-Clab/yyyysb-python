@@ -2,7 +2,13 @@ import datetime
 from getpass import getpass
 
 import requests
-from bs4 import BeautifulSoup
+
+use_beautiful_soup = True
+
+try:
+    from bs4 import BeautifulSoup
+except:
+    use_beautiful_soup = False
 
 use_vimeo_downloader = True
 
@@ -10,6 +16,13 @@ try:
     from vimeo_downloader import Vimeo
 except:
     use_vimeo_downloader = False
+
+use_markdownify = True
+
+try:
+    from markdownify import markdownify as md
+except:
+    use_markdownify = False
 
 global_session = requests.session()
 login_data = {"loggedIn": False}
@@ -68,14 +81,64 @@ def get_bearer_auth() -> BearerAuth:
     return BearerAuth(login_data["idToken"])
 
 
-def get_text_from_html(html : str) -> str:
-    soup = BeautifulSoup(html, features="html.parser")
-    # kill all script and style elements
-    for script in soup(["script", "style"]):
-        script.extract()    # rip it out
+def convert_img_link_to_original(link : str) -> str:
+    link_split = link.split("?")
+    link_no_param_split = link_split[0].split(".")
+    suffix = link_no_param_split[-2] + "." + link_no_param_split[-1]
+    return link.replace(suffix, "nop")
 
-    # get text
-    return soup.get_text(separator="\n")
+
+def get_img_links(html : str) -> list:
+    img_links = []
+
+    if use_beautiful_soup:
+        soup = BeautifulSoup(html, features="html.parser")
+        for img in soup.findAll('img'):
+            link = img.get('src')
+            img_links.append(link)
+    else:
+        start = 0
+        end = 0
+        while True:
+            start = html.find('<img src=', end)
+            if start == -1:
+                break
+            end = html.find('>', start)
+            if end == -1:
+                break
+
+            link = html[start:end].split('"')[1]
+            img_links.append(link)
+
+    return img_links
+
+def process_img_link(html : str, img_links : list) -> str:    
+    for link in img_links:
+        html = html.replace(link, convert_img_link_to_original(link))
+
+    return html
+
+
+def get_text_from_html(html : str) -> str:
+    try:
+        img_links = get_img_links(html)
+        html = process_img_link(html, img_links)
+
+        if use_markdownify:
+            return md(html).replace("\n\n", "\n")
+        elif use_beautiful_soup:
+            soup = BeautifulSoup(html, features="html.parser")
+            # kill all script and style elements
+            for script in soup(["script", "style"]):
+                script.extract()    # rip it out
+
+            # get text
+            return soup.prettify()
+        else:
+            return html
+    except:
+        return html
+
 
 def get_included_content_dict(included : list) -> dict:
     result = {}
