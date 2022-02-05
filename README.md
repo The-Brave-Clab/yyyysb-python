@@ -26,6 +26,12 @@ Execute the script with Python 3.
 python main.py
 ```
 
+For the downloader, execute the `download.py` script. The files will be placed in the current working directory, under `downloaded` folder.
+
+```sh
+python download.py
+```
+
 ## Disclaimer
 
 When viewing certain contents, you are required to login with your account of Yushabu App.
